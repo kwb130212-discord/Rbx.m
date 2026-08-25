@@ -9,10 +9,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -23,112 +26,150 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { }
+    ) { refreshStatus() }
+
+    private lateinit var status: TextView
+    private lateinit var intervalLabel: TextView
+    private lateinit var gameSpinner: Spinner
+
+    private val games = listOf(
+        GameProfile("Roblox 기본", null),
+        GameProfile("내 게임 1", null),
+        GameProfile("내 게임 2", null)
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())
         requestNotificationPermission()
+        refreshStatus()
     }
 
-    private fun buildUi(): LinearLayout {
+    override fun onResume() {
+        super.onResume()
+        refreshStatus()
+    }
+
+    private fun buildUi(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 48, 40, 32)
+            setPadding(32, 44, 32, 32)
+            setBackgroundColor(0xFFF7F8FA.toInt())
         }
 
         val title = TextView(this).apply {
             text = "Rbx.m"
-            textSize = 30f
-        }
-        val subtitle = TextView(this).apply {
-            text = "Roblox 매크로 도우미 · 개인/가족용"
-            textSize = 15f
+            textSize = 34f
+            setTypeface(null, android.graphics.Typeface.BOLD)
         }
         root.addView(title)
-        root.addView(subtitle)
 
-        val label = TextView(this).apply {
+        root.addView(TextView(this).apply {
+            text = "Roblox 매크로 · 개인/가족용"
+            textSize = 15f
+            setTextColor(0xFF667085.toInt())
+            setPadding(0, 4, 0, 20)
+        })
+
+        status = TextView(this).apply {
+            textSize = 15f
+            setPadding(20, 18, 20, 18)
+            setBackgroundColor(0xFFE9F7EF.toInt())
+        }
+        root.addView(status)
+
+        root.addView(TextView(this).apply {
             text = "게임 선택"
             textSize = 18f
-            setPadding(0, 40, 0, 8)
-        }
-        root.addView(label)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 24, 0, 8)
+        })
 
-        val games = Spinner(this).apply {
+        gameSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(
                 this@MainActivity,
                 android.R.layout.simple_spinner_dropdown_item,
-                listOf("Roblox 기본 프로필", "내 게임 프로필 1", "내 게임 프로필 2")
+                games.map { it.name }
             )
         }
-        root.addView(games)
+        root.addView(gameSpinner)
 
-        val interval = TextView(this).apply {
-            text = "터치 간격: 10초"
-            textSize = 17f
-            setPadding(0, 24, 0, 8)
+        intervalLabel = TextView(this).apply {
+            textSize = 16f
+            setPadding(0, 22, 0, 2)
         }
-        root.addView(interval)
+        root.addView(intervalLabel)
 
-        val start = Button(this).apply {
-            text = "매크로 시작"
-            setOnClickListener {
-                if (!isAccessibilityEnabled()) {
-                    Toast.makeText(context, "먼저 접근성 서비스를 허용하세요.", Toast.LENGTH_LONG).show()
-                    openAccessibilitySettings()
-                    return@setOnClickListener
+        val seek = SeekBar(this).apply {
+            max = 39
+            progress = ((MacroPrefs.intervalMs(this@MainActivity) / 1000L).toInt() - 1).coerceIn(0, 39)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                    val seconds = value + 1
+                    intervalLabel.text = "터치 간격  ·  ${seconds}초"
+                    if (fromUser) MacroPrefs.intervalMs(this@MainActivity, seconds * 1000L)
                 }
-                MacroPrefs.intervalMs(this@MainActivity, 10_000L)
-                ContextCompat.startForegroundService(
-                    this@MainActivity,
-                    Intent(this@MainActivity, MacroForegroundService::class.java).apply {
-                        action = MacroForegroundService.ACTION_START
-                    }
-                )
-                Toast.makeText(context, "매크로 서비스를 시작했습니다.", Toast.LENGTH_SHORT).show()
+                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+            })
+        }
+        root.addView(seek)
+
+        val start = button("▶  매크로 시작") {
+            if (!isAccessibilityEnabled()) {
+                Toast.makeText(this, "접근성 서비스를 먼저 허용하세요.", Toast.LENGTH_LONG).show()
+                openAccessibilitySettings()
+                return@button
             }
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, MacroForegroundService::class.java).setAction(MacroForegroundService.ACTION_START)
+            )
+            Toast.makeText(this, "Roblox가 화면에 있을 때만 자동 터치합니다.", Toast.LENGTH_SHORT).show()
+            refreshStatus()
         }
         root.addView(start)
 
-        val stop = Button(this).apply {
-            text = "매크로 정지"
-            setOnClickListener {
-                startService(Intent(this@MainActivity, MacroForegroundService::class.java).apply {
-                    action = MacroForegroundService.ACTION_STOP
-                })
-            }
+        val stop = button("■  매크로 정지") {
+            startService(Intent(this, MacroForegroundService::class.java).setAction(MacroForegroundService.ACTION_STOP))
+            refreshStatus()
         }
         root.addView(stop)
 
-        val launch = Button(this).apply {
-            text = "Roblox 실행 / 로그인"
-            setOnClickListener { launchRoblox() }
-        }
-        root.addView(launch)
+        root.addView(button("🎮  Roblox 실행 / 로그인") { launchRoblox() })
+        root.addView(button("🔐  필수 권한 설정") { openAccessibilitySettings() })
+        root.addView(button("🔋  배터리 최적화 설정") { openBatterySettings() })
+        root.addView(button("☀  화면 꺼짐 방지") {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Toast.makeText(this, "Rbx.m 화면에서 화면 꺼짐 방지를 켰습니다.", Toast.LENGTH_SHORT).show()
+        })
 
-        val permissions = Button(this).apply {
-            text = "필수 권한 설정"
-            setOnClickListener { openAccessibilitySettings() }
-        }
-        root.addView(permissions)
-
-        val keepScreen = Button(this).apply {
-            text = "이 화면에서는 화면 꺼짐 방지"
-            setOnClickListener {
-                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                Toast.makeText(context, "화면 꺼짐 방지를 켰습니다.", Toast.LENGTH_SHORT).show()
-            }
-        }
-        root.addView(keepScreen)
-
-        val battery = Button(this).apply {
-            text = "배터리 최적화 설정 열기"
-            setOnClickListener { openBatterySettings() }
-        }
-        root.addView(battery)
+        root.addView(TextView(this).apply {
+            text = "안내\n• Rbx.m 서비스는 백그라운드에서 유지됩니다.\n• 실제 자동 터치는 Roblox가 현재 화면에 있을 때만 수행합니다.\n• Roblox 계정 비밀번호는 Rbx.m에서 받거나 저장하지 않습니다."
+            textSize = 13f
+            setTextColor(0xFF667085.toInt())
+            setPadding(0, 24, 0, 0)
+        })
 
         return root
+    }
+
+    private fun button(textValue: String, action: () -> Unit): Button = Button(this).apply {
+        text = textValue
+        textSize = 15f
+        gravity = Gravity.CENTER
+        setOnClickListener { action() }
+        val p = LinearLayout.LayoutParams(-1, 56)
+        p.topMargin = 10
+        layoutParams = p
+    }
+
+    private fun refreshStatus() {
+        if (!::status.isInitialized) return
+        val accessibility = if (isAccessibilityEnabled()) "접근성 연결됨" else "접근성 연결 필요"
+        val roblox = if (packageManager.getLaunchIntentForPackage("com.roblox.client") != null) "Roblox 설치됨" else "Roblox 미설치"
+        status.text = "$accessibility  ·  $roblox\n선택 게임: ${games[gameSpinner.selectedItemPosition.coerceIn(0, games.lastIndex)].name}"
+        intervalLabel.text = "터치 간격  ·  ${MacroPrefs.intervalMs(this) / 1000L}초"
     }
 
     private fun launchRoblox() {
@@ -137,8 +178,7 @@ class MainActivity : AppCompatActivity() {
         else Toast.makeText(this, "Roblox 앱이 설치되어 있지 않습니다.", Toast.LENGTH_LONG).show()
     }
 
-    private fun isAccessibilityEnabled(): Boolean =
-        RbxAccessibilityService.isConnected
+    private fun isAccessibilityEnabled(): Boolean = RbxAccessibilityService.isConnected
 
     private fun openAccessibilitySettings() {
         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -151,9 +191,7 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                     data = Uri.parse("package:$packageName")
                 })
-            } else {
-                Toast.makeText(this, "이미 배터리 최적화 제외 상태입니다.", Toast.LENGTH_SHORT).show()
-            }
+            } else Toast.makeText(this, "이미 배터리 최적화 제외 상태입니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -164,6 +202,8 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
+data class GameProfile(val name: String, val placeId: Long?)
+
 object MacroPrefs {
     private const val PREFS = "macro"
     private const val INTERVAL = "interval_ms"
@@ -171,6 +211,6 @@ object MacroPrefs {
     fun intervalMs(context: Context, value: Long? = null): Long {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (value != null) prefs.edit().putLong(INTERVAL, value).apply()
-        return prefs.getLong(INTERVAL, 10_000L).coerceAtLeast(250L)
+        return prefs.getLong(INTERVAL, 10_000L).coerceIn(1_000L, 40_000L)
     }
 }
