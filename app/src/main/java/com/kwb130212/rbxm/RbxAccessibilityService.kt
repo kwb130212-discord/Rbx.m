@@ -5,26 +5,36 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
-import android.view.Display
+import android.view.accessibility.AccessibilityEvent
 
 class RbxAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
+    @Volatile private var foregroundPackage: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         isConnected = true
+        instance = this
     }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        ) {
+            foregroundPackage = event.packageName?.toString()
+        }
+    }
+
+    override fun onInterrupt() = Unit
 
     override fun onDestroy() {
-        running = false
-        handler.removeCallbacksAndMessages(null)
+        stopMacro()
+        if (instance === this) instance = null
         isConnected = false
+        foregroundPackage = null
         super.onDestroy()
     }
-
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
-    override fun onInterrupt() = Unit
 
     fun startMacro(intervalMs: Long) {
         running = true
@@ -32,8 +42,8 @@ class RbxAccessibilityService : AccessibilityService() {
         val loop = object : Runnable {
             override fun run() {
                 if (!running) return
-                tapCenter()
-                handler.postDelayed(this, intervalMs.coerceAtLeast(250L))
+                if (foregroundPackage == ROBLOX_PACKAGE) tapCenter()
+                handler.postDelayed(this, intervalMs.coerceIn(1_000L, 40_000L))
             }
         }
         handler.post(loop)
@@ -56,12 +66,10 @@ class RbxAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        const val ROBLOX_PACKAGE = "com.roblox.client"
         @Volatile var isConnected: Boolean = false
             private set
         @Volatile var instance: RbxAccessibilityService? = null
-    }
-
-    init {
-        instance = this
+            private set
     }
 }
