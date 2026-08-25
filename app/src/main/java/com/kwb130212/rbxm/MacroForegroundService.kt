@@ -9,23 +9,21 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
 
 class MacroForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
         startForeground(NOTIFICATION_ID, notification("서비스 대기 중"))
+        RbxLogger.info(this, "Foreground service created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        RbxLogger.info(this, "Service command: ${intent?.action ?: "RECREATE"}")
         when (intent?.action) {
             ACTION_START -> startMacro()
             ACTION_STOP -> stopMacro()
-            else -> {
-                // Android may recreate a START_STICKY service with a null intent.
-                if (MacroPrefs.isRunning(this)) startMacro()
-            }
+            else -> if (MacroPrefs.isRunning(this)) startMacro()
         }
         return START_STICKY
     }
@@ -35,27 +33,28 @@ class MacroForegroundService : Service() {
         val interval = MacroPrefs.intervalMs(this)
         RbxAccessibilityService.instance?.startMacro(interval)
         updateNotification("매크로 실행 중 · ${interval / 1000}s · 서비스 유지")
+        RbxLogger.info(this, "Macro started; intervalMs=$interval")
     }
 
     private fun stopMacro() {
         MacroPrefs.setRunning(this, false)
         RbxAccessibilityService.instance?.stopMacro()
+        RbxLogger.info(this, "Macro stopped")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Closing Rbx.m from Recents must not stop the foreground service.
         if (MacroPrefs.isRunning(this)) {
+            RbxLogger.info(this, "App task removed; foreground service kept alive")
             startForeground(NOTIFICATION_ID, notification("매크로 실행 중 · 서비스 유지"))
         }
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
-        if (!MacroPrefs.isRunning(this)) {
-            RbxAccessibilityService.instance?.stopMacro()
-        }
+        RbxLogger.info(this, "Foreground service destroyed")
+        if (!MacroPrefs.isRunning(this)) RbxAccessibilityService.instance?.stopMacro()
         super.onDestroy()
     }
 
@@ -70,14 +69,12 @@ class MacroForegroundService : Service() {
 
     private fun notification(text: String): Notification {
         val openIntent = PendingIntent.getActivity(
-            this,
-            10,
+            this, 10,
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             pendingIntentFlags()
         )
         val stopIntent = PendingIntent.getService(
-            this,
-            11,
+            this, 11,
             Intent(this, MacroForegroundService::class.java).setAction(ACTION_STOP),
             pendingIntentFlags()
         )
