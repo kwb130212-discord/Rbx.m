@@ -57,13 +57,11 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(0xFFF7F8FA.toInt())
         }
 
-        val title = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "Rbx.m"
             textSize = 34f
             setTypeface(null, android.graphics.Typeface.BOLD)
-        }
-        root.addView(title)
-
+        })
         root.addView(TextView(this).apply {
             text = "Roblox 매크로 · 개인/가족용"
             textSize = 15f
@@ -115,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(seek)
 
-        val start = button("▶  매크로 시작") {
+        root.addView(button("▶  매크로 시작") {
             if (!isAccessibilityEnabled()) {
                 Toast.makeText(this, "접근성 서비스를 먼저 허용하세요.", Toast.LENGTH_LONG).show()
                 openAccessibilitySettings()
@@ -125,32 +123,27 @@ class MainActivity : AppCompatActivity() {
                 this,
                 Intent(this, MacroForegroundService::class.java).setAction(MacroForegroundService.ACTION_START)
             )
-            Toast.makeText(this, "Roblox가 화면에 있을 때만 자동 터치합니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Rbx.m 서비스가 백그라운드에서 유지됩니다.", Toast.LENGTH_SHORT).show()
             refreshStatus()
-        }
-        root.addView(start)
-
-        val stop = button("■  매크로 정지") {
+        })
+        root.addView(button("■  매크로 정지") {
             startService(Intent(this, MacroForegroundService::class.java).setAction(MacroForegroundService.ACTION_STOP))
             refreshStatus()
-        }
-        root.addView(stop)
-
+        })
         root.addView(button("🎮  Roblox 실행 / 로그인") { launchRoblox() })
         root.addView(button("🔐  필수 권한 설정") { openAccessibilitySettings() })
         root.addView(button("🔋  배터리 최적화 설정") { openBatterySettings() })
         root.addView(button("☀  화면 꺼짐 방지") {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(this, "Rbx.m 화면에서 화면 꺼짐 방지를 켰습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "이 화면에서는 화면 꺼짐을 방지합니다.", Toast.LENGTH_SHORT).show()
         })
 
         root.addView(TextView(this).apply {
-            text = "안내\n• Rbx.m 서비스는 백그라운드에서 유지됩니다.\n• 실제 자동 터치는 Roblox가 현재 화면에 있을 때만 수행합니다.\n• Roblox 계정 비밀번호는 Rbx.m에서 받거나 저장하지 않습니다."
+            text = "안내\n• Rbx.m 서비스는 앱 화면을 닫거나 최근 앱에서 제거해도 유지되도록 설계됩니다.\n• 서비스가 실행 중이어도 실제 자동 터치는 Roblox가 현재 화면에 있을 때만 수행합니다.\n• 화면이 꺼지면 Android의 화면 입력 자체가 중단될 수 있습니다.\n• Roblox 계정 비밀번호는 Rbx.m에서 받거나 저장하지 않습니다."
             textSize = 13f
             setTextColor(0xFF667085.toInt())
             setPadding(0, 24, 0, 0)
         })
-
         return root
     }
 
@@ -168,7 +161,8 @@ class MainActivity : AppCompatActivity() {
         if (!::status.isInitialized) return
         val accessibility = if (isAccessibilityEnabled()) "접근성 연결됨" else "접근성 연결 필요"
         val roblox = if (packageManager.getLaunchIntentForPackage("com.roblox.client") != null) "Roblox 설치됨" else "Roblox 미설치"
-        status.text = "$accessibility  ·  $roblox\n선택 게임: ${games[gameSpinner.selectedItemPosition.coerceIn(0, games.lastIndex)].name}"
+        val running = if (MacroPrefs.isRunning(this)) "매크로 서비스 실행 중" else "매크로 정지"
+        status.text = "$accessibility  ·  $roblox\n$running\n선택 게임: ${games[gameSpinner.selectedItemPosition.coerceIn(0, games.lastIndex)].name}"
         intervalLabel.text = "터치 간격  ·  ${MacroPrefs.intervalMs(this) / 1000L}초"
     }
 
@@ -203,14 +197,3 @@ class MainActivity : AppCompatActivity() {
 }
 
 data class GameProfile(val name: String, val placeId: Long?)
-
-object MacroPrefs {
-    private const val PREFS = "macro"
-    private const val INTERVAL = "interval_ms"
-
-    fun intervalMs(context: Context, value: Long? = null): Long {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (value != null) prefs.edit().putLong(INTERVAL, value).apply()
-        return prefs.getLong(INTERVAL, 10_000L).coerceIn(1_000L, 40_000L)
-    }
-}
