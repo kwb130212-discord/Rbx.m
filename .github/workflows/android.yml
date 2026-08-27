@@ -2,10 +2,13 @@ name: Android APK
 
 on:
   push:
-    branches: ["main", "feature/android-macro-app"]
+    branches: ["main", "**"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -19,6 +22,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -28,8 +32,15 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Upload APK
+      - name: Build release APK (unsigned)
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: rbxm-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: rbxm-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14
