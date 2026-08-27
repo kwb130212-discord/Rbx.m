@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.kwb130212.rbxm.ai.AiAction
 import com.kwb130212.rbxm.ai.AiBrain
 import com.kwb130212.rbxm.ai.GameState
+import com.kwb130212.rbxm.ai.LearningStore
 import com.kwb130212.rbxm.ai.OnlineLearner
 import com.kwb130212.rbxm.ai.VisionEngine
 import java.util.concurrent.Executor
@@ -21,6 +22,7 @@ class RbxAccessibilityService : AccessibilityService() {
     private val vision = VisionEngine()
     private val learner = OnlineLearner()
     private val brain = AiBrain(learner)
+    private lateinit var learningStore: LearningStore
     private var running = false
     @Volatile private var foregroundPackage: String? = null
     private var lastState: GameState? = null
@@ -28,6 +30,8 @@ class RbxAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        learningStore = LearningStore(this)
+        learningStore.load(learner)
         isConnected = true
         instance = this
     }
@@ -42,6 +46,7 @@ class RbxAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         stopMacro()
+        if (::learningStore.isInitialized) learningStore.save(learner)
         if (instance === this) instance = null
         isConnected = false
         foregroundPackage = null
@@ -58,6 +63,7 @@ class RbxAccessibilityService : AccessibilityService() {
         running = false
         handler.removeCallbacksAndMessages(null)
         lastAction = null
+        if (::learningStore.isInitialized) learningStore.save(learner)
     }
 
     private fun scheduleCapture(intervalMs: Long) {
@@ -92,6 +98,10 @@ class RbxAccessibilityService : AccessibilityService() {
             AiAction.Type.IDLE -> Unit
         }
         lastAction = action
+        // Small online update: dangerous scenes reinforce the dodge policy; attack opportunities reinforce attack.
+        if (action.type == AiAction.Type.DODGE) learner.reward("dodge", if (state.danger > 0.7f) 1f else -0.2f)
+        if (action.type == AiAction.Type.ATTACK) learner.reward("attack", if (state.enemies.isNotEmpty()) 0.8f else -0.1f)
+        if (::learningStore.isInitialized) learningStore.save(learner)
         RbxLogger.info(this, "AI action=${action.type} score=${action.score} danger=${state.danger}")
     }
 
