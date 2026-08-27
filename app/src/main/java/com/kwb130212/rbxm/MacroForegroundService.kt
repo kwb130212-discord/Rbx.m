@@ -8,9 +8,15 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
+/** Keeps the controller alive while the phone remains powered on.
+ * Android may still stop/restrict background work depending on OEM policies.
+ */
 class MacroForegroundService : Service() {
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -30,6 +36,7 @@ class MacroForegroundService : Service() {
 
     private fun startMacro() {
         MacroPrefs.setRunning(this, true)
+        acquireWakeLockIfNeeded()
         val interval = MacroPrefs.intervalMs(this)
         RbxAccessibilityService.instance?.startMacro(interval)
         updateNotification("매크로 실행 중 · ${interval / 1000}s · 서비스 유지")
@@ -39,9 +46,25 @@ class MacroForegroundService : Service() {
     private fun stopMacro() {
         MacroPrefs.setRunning(this, false)
         RbxAccessibilityService.instance?.stopMacro()
+        releaseWakeLock()
         RbxLogger.info(this, "Macro stopped")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun acquireWakeLockIfNeeded() {
+        if (!AutoFarmPrefs.keepAwake(this)) return
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(PowerManager::class.java)
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:macro").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -55,6 +78,7 @@ class MacroForegroundService : Service() {
     override fun onDestroy() {
         RbxLogger.info(this, "Foreground service destroyed")
         if (!MacroPrefs.isRunning(this)) RbxAccessibilityService.instance?.stopMacro()
+        releaseWakeLock()
         super.onDestroy()
     }
 
