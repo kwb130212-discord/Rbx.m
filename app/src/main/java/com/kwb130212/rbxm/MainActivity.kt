@@ -48,8 +48,8 @@ class MainActivity : AppCompatActivity() {
         scroll.addView(root)
 
         root.addView(TextView(this).apply {
-            text = "Rbx.m"
-            textSize = 34f
+            text = "dino-brawl-tool"
+            textSize = 30f
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         root.addView(TextView(this).apply {
@@ -116,8 +116,8 @@ class MainActivity : AppCompatActivity() {
         })
 
         section(root, "🧠 AI / 비전")
-        root.addView(switch("화면 분석", true) { /* reserved for vision engine */ })
-        root.addView(switch("학습 데이터 기록", true) { /* local learning hook */ })
+        root.addView(switch("화면 분석", true) { })
+        root.addView(switch("학습 데이터 기록", true) { })
         root.addView(switch("화면 꺼짐 시 서비스 유지 시도", AutoFarmPrefs.keepAwake(this)) { AutoFarmPrefs.keepAwake(this, it) })
 
         section(root, "🔐 권한 및 안정성")
