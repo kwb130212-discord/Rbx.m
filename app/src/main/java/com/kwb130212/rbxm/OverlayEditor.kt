@@ -14,7 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.roundToInt
 
-/** Floating, draggable action markers. Only marker views receive touches in edit mode. */
+/** Floating, draggable action markers. X closes the editor without changing saved positions. */
 object OverlayEditor {
     private var wm: WindowManager? = null
     private val views = mutableListOf<View>()
@@ -74,18 +74,27 @@ object OverlayEditor {
     private fun addToolbar(context: Context) {
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(context, 8), dp(context, 5), dp(context, 8), dp(context, 5))
+            setPadding(dp(context, 6), dp(context, 4), dp(context, 6), dp(context, 4))
             background = GradientDrawable().apply {
                 setColor(0xEE17191C.toInt())
                 cornerRadius = dp(context, 14).toFloat()
             }
+        }
+        val close = TextView(context).apply {
+            text = "✕"
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(dp(context, 14), dp(context, 5), dp(context, 14), dp(context, 5))
+            contentDescription = "위치 설정 닫기"
+            setOnClickListener { hide() }
         }
         val done = TextView(context).apply {
             text = "완료"
             textSize = 14f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(dp(context, 16), dp(context, 7), dp(context, 16), dp(context, 7))
+            setPadding(dp(context, 12), dp(context, 7), dp(context, 12), dp(context, 7))
             setOnClickListener { hide() }
         }
         val reset = TextView(context).apply {
@@ -99,6 +108,7 @@ object OverlayEditor {
                 show(context)
             }
         }
+        bar.addView(close)
         bar.addView(done)
         bar.addView(reset)
         val params = WindowManager.LayoutParams(
@@ -107,8 +117,9 @@ object OverlayEditor {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = dp(context, 34)
+            gravity = Gravity.TOP or Gravity.START
+            x = dp(context, 10)
+            y = dp(context, 28)
         }
         wm?.addView(bar, params)
         toolbar = bar
@@ -142,8 +153,8 @@ object OverlayEditor {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val dm = context.resources.displayMetrics
-                    val cx = (params.x + view.width / 2f) / dm.widthPixels.toFloat()
-                    val cy = (params.y + view.height / 2f) / dm.heightPixels.toFloat()
+                    val cx = ((params.x + view.width / 2f) / dm.widthPixels).coerceIn(0f, 1f)
+                    val cy = ((params.y + view.height / 2f) / dm.heightPixels).coerceIn(0f, 1f)
                     OverlayPositionStore.set(context, action, cx, cy)
                     return true
                 }
