@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Bitmap
 import android.graphics.Path
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -12,9 +13,11 @@ import com.kwb130212.rbxm.ai.AiBrain
 import com.kwb130212.rbxm.ai.GameState
 import com.kwb130212.rbxm.ai.OnlineLearner
 import com.kwb130212.rbxm.ai.VisionEngine
+import java.util.concurrent.Executor
 
 class RbxAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
+    private val callbackExecutor = Executor { command -> handler.post(command) }
     private val vision = VisionEngine()
     private val learner = OnlineLearner()
     private val brain = AiBrain(learner)
@@ -48,7 +51,7 @@ class RbxAccessibilityService : AccessibilityService() {
     fun startMacro(intervalMs: Long) {
         running = true
         handler.removeCallbacksAndMessages(null)
-        scheduleCapture(intervalMs.coerceIn(350L, 2_000L))
+        scheduleCapture(intervalMs.coerceIn(500L, 2_000L))
     }
 
     fun stopMacro() {
@@ -59,16 +62,17 @@ class RbxAccessibilityService : AccessibilityService() {
 
     private fun scheduleCapture(intervalMs: Long) {
         if (!running) return
-        if (android.os.Build.VERSION.SDK_INT >= 30 && foregroundPackage == ROBLOX_PACKAGE) {
-            takeScreenshot(DISPLAY_ID, android.os.HandlerExecutor(handler), object : TakeScreenshotCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && foregroundPackage == ROBLOX_PACKAGE) {
+            takeScreenshot(DISPLAY_ID, callbackExecutor, object : TakeScreenshotCallback() {
                 override fun onSuccess(screenshot: ScreenshotResult) {
-                    screenshot.asBitmap()?.let { bitmap ->
+                    val bitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                    if (bitmap != null) {
                         val state = vision.analyze(bitmap)
                         lastState = state
-                        val action = brain.decide(state)
-                        execute(action, state)
+                        execute(brain.decide(state), state)
                         bitmap.recycle()
                     }
+                    screenshot.hardwareBuffer.close()
                     handler.postDelayed({ scheduleCapture(intervalMs) }, intervalMs)
                 }
                 override fun onFailure(errorCode: Int) {
@@ -88,7 +92,7 @@ class RbxAccessibilityService : AccessibilityService() {
             AiAction.Type.IDLE -> Unit
         }
         lastAction = action
-        RbxLogger.info(this, "AI action=${action.type} confidence=${action.score} danger=${state.danger}")
+        RbxLogger.info(this, "AI action=${action.type} score=${action.score} danger=${state.danger}")
     }
 
     private fun tap(x: Float, y: Float) {
