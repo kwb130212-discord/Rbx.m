@@ -10,7 +10,7 @@
         android:allowBackup="true"
         android:label="Rbx.m"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Rbxm">
+        android:theme="@style/Theme.RbxM">
 
         <activity
             android:name=".MainActivity"
@@ -27,7 +27,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-visible macro controller service" />
+                android:value="User-visible automation controller service" />
         </service>
 
         <service
