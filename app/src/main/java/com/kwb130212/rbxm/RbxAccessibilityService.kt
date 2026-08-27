@@ -6,7 +6,6 @@ import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
-import kotlin.math.roundToInt
 
 class RbxAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
@@ -41,10 +40,7 @@ class RbxAccessibilityService : AccessibilityService() {
         val loop = object : Runnable {
             override fun run() {
                 if (!running) return
-                // Safety gate: never dispatch game input unless the configured target is foreground.
-                if (foregroundPackage == ROBLOX_PACKAGE) {
-                    tap(OverlayPositionStore.Action.ATTACK)
-                }
+                if (foregroundPackage == TARGET_PACKAGE) tap(OverlayPositionStore.Action.ATTACK)
                 handler.postDelayed(this, intervalMs.coerceIn(1_000L, 40_000L))
             }
         }
@@ -57,7 +53,7 @@ class RbxAccessibilityService : AccessibilityService() {
     }
 
     fun tap(action: OverlayPositionStore.Action): Boolean {
-        if (foregroundPackage != ROBLOX_PACKAGE) return false
+        if (foregroundPackage != TARGET_PACKAGE) return false
         val point = OverlayPositionStore.get(this, action)
         val dm = resources.displayMetrics
         val x = (point.x * dm.widthPixels).coerceIn(0f, dm.widthPixels - 1f)
@@ -70,7 +66,7 @@ class RbxAccessibilityService : AccessibilityService() {
     }
 
     fun swipe(action: OverlayPositionStore.Action, dx: Float, dy: Float, durationMs: Long = 160L): Boolean {
-        if (foregroundPackage != ROBLOX_PACKAGE) return false
+        if (foregroundPackage != TARGET_PACKAGE) return false
         val point = OverlayPositionStore.get(this, action)
         val dm = resources.displayMetrics
         val sx = (point.x * dm.widthPixels).coerceIn(0f, dm.widthPixels - 1f)
@@ -85,7 +81,7 @@ class RbxAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        const val ROBLOX_PACKAGE = "com.roblox.client"
+        const val TARGET_PACKAGE = "com.supercell.brawlstars"
         @Volatile var isConnected: Boolean = false
             private set
         @Volatile var instance: RbxAccessibilityService? = null
