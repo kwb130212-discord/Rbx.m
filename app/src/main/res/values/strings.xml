@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Rbx.m</string>
-    <string name="accessibility_service_description">Rbx.m uses accessibility gestures for user-configured touch automation. Gestures are delivered to the current foreground screen.</string>
+    <string name="app_name">dino-brawl-tool</string>
+    <string name="accessibility_service_description">dino-brawl-tool uses accessibility gestures for user-configured touch automation. Gestures are delivered to the current foreground screen.</string>
 </resources>
