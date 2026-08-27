@@ -1,19 +1,30 @@
-# Rbx.m
+# Rbx.m AI
 
-Android companion app for personal/family Roblox macro experiments.
+Android on-device adaptive controller for a user-owned/test game environment.
 
-## Current design
+## Architecture
 
-- Game profile list
-- Roblox launch shortcut
-- Accessibility-service based tap automation
-- Foreground service for persistent macro state
-- Keep-screen-on option
-- Permission status/setup screen
-- GitHub Actions APK build
-
-> Android does not allow an ordinary app to inject a touch into Roblox while another app is in the foreground. This project therefore does not claim to control Roblox invisibly in the background. The accessibility gesture targets the current foreground display.
+- **Accessibility controller**: performs foreground-only gestures.
+- **VisionEngine**: analyzes screenshots locally on the device.
+- **AiBrain**: chooses move/dodge/attack actions from the current state.
+- **OnlineLearner**: updates action values during use.
+- **LearningStore**: persists the policy in app-private storage.
+- **Python trainer**: `python/train_policy.py` provides an offline telemetry trainer.
 
 ## Build
 
-Open this repository in Android Studio and build the `app` module, or use the GitHub Actions workflow.
+```bash
+gradle --no-daemon :app:assembleDebug
+```
+
+The GitHub Actions workflow also uploads the debug APK as an artifact.
+
+## Android requirements
+
+- Android 11+ for screenshot-driven vision.
+- Accessibility service enabled by the user.
+- The target game must be in the foreground before automation actions are issued.
+
+## Notes
+
+The app does not inspect game network packets, credentials, cookies, or authentication tokens. Vision and policy data stay on-device. The current vision implementation is a lightweight heuristic baseline; a trained detector can replace it later without changing the controller/learning interfaces.
