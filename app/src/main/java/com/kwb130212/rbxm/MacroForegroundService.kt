@@ -11,9 +11,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
-/** Keeps the controller alive while the phone remains powered on.
- * Android may still stop/restrict background work depending on OEM policies.
- */
+/** Keeps the controller alive while the phone remains powered on. Android/OEM policies may still restrict it. */
 class MacroForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -39,7 +37,7 @@ class MacroForegroundService : Service() {
         acquireWakeLockIfNeeded()
         val interval = MacroPrefs.intervalMs(this)
         RbxAccessibilityService.instance?.startMacro(interval)
-        updateNotification("매크로 실행 중 · ${interval / 1000}s · 서비스 유지")
+        updateNotification("자동화 실행 중 · ${interval / 1000}s · 서비스 유지")
         RbxLogger.info(this, "Macro started; intervalMs=$interval")
     }
 
@@ -56,7 +54,7 @@ class MacroForegroundService : Service() {
         if (!AutoFarmPrefs.keepAwake(this)) return
         if (wakeLock?.isHeld == true) return
         val pm = getSystemService(PowerManager::class.java)
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:macro").apply {
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:automation").apply {
             setReferenceCounted(false)
             acquire()
         }
@@ -70,7 +68,7 @@ class MacroForegroundService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (MacroPrefs.isRunning(this)) {
             RbxLogger.info(this, "App task removed; foreground service kept alive")
-            startForeground(NOTIFICATION_ID, notification("매크로 실행 중 · 서비스 유지"))
+            startForeground(NOTIFICATION_ID, notification("자동화 실행 중 · 서비스 유지"))
         }
         super.onTaskRemoved(rootIntent)
     }
@@ -85,9 +83,8 @@ class MacroForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createChannel() {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Rbx.m 매크로", NotificationManager.IMPORTANCE_LOW)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "dino-brawl-tool 자동화", NotificationManager.IMPORTANCE_LOW)
         )
     }
 
@@ -104,7 +101,7 @@ class MacroForegroundService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Rbx.m")
+            .setContentTitle("dino-brawl-tool")
             .setContentText(text)
             .setContentIntent(openIntent)
             .setOngoing(true)
@@ -113,18 +110,16 @@ class MacroForegroundService : Service() {
     }
 
     private fun updateNotification(text: String) {
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, notification(text))
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
     }
 
-    private fun pendingIntentFlags(): Int =
-        PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+    private fun pendingIntentFlags(): Int = PendingIntent.FLAG_UPDATE_CURRENT or
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 
     companion object {
         const val ACTION_START = "com.kwb130212.rbxm.action.START"
         const val ACTION_STOP = "com.kwb130212.rbxm.action.STOP"
-        private const val CHANNEL_ID = "rbxm_macro"
+        private const val CHANNEL_ID = "dino_brawl_tool_automation"
         private const val NOTIFICATION_ID = 1001
     }
 }
@@ -141,11 +136,8 @@ object MacroPrefs {
     }
 
     fun setRunning(context: android.content.Context, running: Boolean) {
-        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-            .edit().putBoolean(RUNNING, running).apply()
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit().putBoolean(RUNNING, running).apply()
     }
 
-    fun isRunning(context: android.content.Context): Boolean =
-        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-            .getBoolean(RUNNING, false)
+    fun isRunning(context: android.content.Context): Boolean = context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getBoolean(RUNNING, false)
 }
