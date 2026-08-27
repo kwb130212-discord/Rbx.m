@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Rbx.m</string>
-    <string name="accessibility_service_description">Rbx.m uses accessibility gestures for user-configured touch automation. Gestures are delivered to the current foreground screen.</string>
+    <string name="app_name">Rbx.m AI</string>
+    <string name="accessibility_service_description">Rbx.m AI analyzes the foreground game screen locally and performs user-enabled touch automation.</string>
 </resources>
