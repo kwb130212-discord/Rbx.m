@@ -68,17 +68,19 @@ class RbxAccessibilityService : AccessibilityService() {
 
     private fun scheduleCapture(intervalMs: Long) {
         if (!running) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && foregroundPackage == ROBLOX_PACKAGE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && foregroundPackage == BRAWL_STARS_PACKAGE) {
             takeScreenshot(DISPLAY_ID, callbackExecutor, object : TakeScreenshotCallback() {
                 override fun onSuccess(screenshot: ScreenshotResult) {
-                    val bitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                    val hardware = screenshot.hardwareBuffer
+                    val bitmap = Bitmap.wrapHardwareBuffer(hardware, screenshot.colorSpace)
+                        ?.copy(Bitmap.Config.ARGB_8888, false)
                     if (bitmap != null) {
                         val state = vision.analyze(bitmap)
                         lastState = state
                         execute(brain.decide(state), state)
                         bitmap.recycle()
                     }
-                    screenshot.hardwareBuffer.close()
+                    hardware.close()
                     handler.postDelayed({ scheduleCapture(intervalMs) }, intervalMs)
                 }
                 override fun onFailure(errorCode: Int) {
@@ -98,7 +100,6 @@ class RbxAccessibilityService : AccessibilityService() {
             AiAction.Type.IDLE -> Unit
         }
         lastAction = action
-        // Small online update: dangerous scenes reinforce the dodge policy; attack opportunities reinforce attack.
         if (action.type == AiAction.Type.DODGE) learner.reward("dodge", if (state.danger > 0.7f) 1f else -0.2f)
         if (action.type == AiAction.Type.ATTACK) learner.reward("attack", if (state.enemies.isNotEmpty()) 0.8f else -0.1f)
         if (::learningStore.isInitialized) learningStore.save(learner)
@@ -116,7 +117,7 @@ class RbxAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        const val ROBLOX_PACKAGE = "com.supercell.brawlstars"
+        const val BRAWL_STARS_PACKAGE = "com.supercell.brawlstars"
         private const val DISPLAY_ID = 0
         @Volatile var isConnected: Boolean = false
             private set
