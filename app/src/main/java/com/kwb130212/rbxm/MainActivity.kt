@@ -24,19 +24,45 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refreshStatus() }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { advanceSetup() }
     private lateinit var status: TextView
+    private var setupStarted = false
     private val games = listOf(GameProfile("Brawl Stars", "com.supercell.brawlstars"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())
-        requestNotificationPermission()
+        if (savedInstanceState == null) {
+            setupStarted = true
+            advanceSetup()
+        }
         refreshStatus()
     }
 
-    override fun onResume() { super.onResume(); refreshStatus() }
+    override fun onResume() {
+        super.onResume()
+        refreshStatus()
+        if (setupStarted) advanceSetup()
+    }
+
     override fun onDestroy() { OverlayEditor.hide(); super.onDestroy() }
+
+    /** Opens required Android settings one at a time and continues after returning. */
+    private fun advanceSetup() {
+        if (!setupStarted) return
+        when {
+            Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            !Settings.canDrawOverlays(this) ->
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            !isAccessibilityEnabled() ->
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !(getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName) ->
+                runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) }
+                    .onFailure { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            else -> setupStarted = false
+        }
+    }
 
     private fun buildUi(): View {
         val scroll = ScrollView(this)
@@ -58,7 +84,6 @@ class MainActivity : AppCompatActivity() {
             setTextColor(0xFF667085.toInt())
             setPadding(0, 2, 0, 18)
         })
-
         status = TextView(this).apply {
             textSize = 14f
             setPadding(20, 18, 20, 18)
@@ -67,16 +92,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(status)
 
         section(root, "🎮 게임")
-        root.addView(TextView(this).apply {
-            text = "지원 프로필"
-            textSize = 13f
-            setTextColor(0xFF667085.toInt())
-            setPadding(0, 4, 0, 4)
-        })
         root.addView(Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, games.map { it.name })
         })
-        root.addView(button("▶ 선택한 게임 실행") { launchGame() })
+        root.addView(button("▶ Brawl Stars 열기") { launchGame() })
 
         section(root, "⚡ 오토메이션")
         root.addView(switch("오토팜 활성화", AutoFarmPrefs.enabled(this)) { AutoFarmPrefs.enabled(this, it) })
@@ -108,12 +127,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(button("위치 편집기 열기") {
             if (!Settings.canDrawOverlays(this)) openOverlaySettings() else OverlayEditor.show(this)
         })
-        root.addView(TextView(this).apply {
-            text = "오버레이에서 컨트롤 마커를 드래그하여 게임별 위치를 저장할 수 있습니다."
-            textSize = 12f
-            setTextColor(0xFF667085.toInt())
-            setPadding(0, 4, 0, 0)
-        })
 
         section(root, "🧠 AI / 비전")
         root.addView(switch("화면 분석", true) { })
@@ -123,9 +136,11 @@ class MainActivity : AppCompatActivity() {
         section(root, "🔐 권한 및 안정성")
         root.addView(button("🪟 다른 앱 위에 표시") { openOverlaySettings() })
         root.addView(button("♿ 접근성 서비스") { openAccessibilitySettings() })
-        root.addView(button("🔋 배터리 최적화 설정") { openBatterySettings() })
+        root.addView(button("🔔 알림 권한") { requestNotificationPermission() })
+        root.addView(button("🔋 배터리 최적화") { openBatterySettings() })
+        root.addView(button("⚡ 전체 권한 다시 확인") { setupStarted = true; advanceSetup() })
         root.addView(TextView(this).apply {
-            text = "갤럭시에서는 배터리 최적화/백그라운드 제한 설정에 따라 장시간 실행 여부가 달라질 수 있습니다."
+            text = "처음 실행하면 필요한 권한을 순서대로 안내합니다. 갤럭시는 백그라운드 제한 설정에 따라 장시간 실행 여부가 달라질 수 있습니다."
             textSize = 12f
             setTextColor(0xFF667085.toInt())
             setPadding(0, 8, 0, 0)
@@ -179,17 +194,32 @@ class MainActivity : AppCompatActivity() {
         status.text = "$accessibility  ·  $overlay\n$game  ·  $running\n오토팜: ${if (AutoFarmPrefs.enabled(this)) AutoFarmPrefs.mode(this).label else "OFF"}"
     }
 
-    private fun launchGame() { packageManager.getLaunchIntentForPackage(games[0].packageName)?.let { startActivity(it) } }
+    private fun launchGame() {
+        if (!Settings.canDrawOverlays(this) || !isAccessibilityEnabled()) {
+            setupStarted = true
+            advanceSetup()
+            return
+        }
+        packageManager.getLaunchIntentForPackage(games[0].packageName)?.let { startActivity(it) }
+    }
+
     private fun isAccessibilityEnabled() = RbxAccessibilityService.isConnected
     private fun openAccessibilitySettings() = startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     private fun openOverlaySettings() = startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
     private fun openBatterySettings() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (!pm.isIgnoringBatteryOptimizations(packageName)) startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) }
+                    .onFailure { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            }
         }
     }
-    private fun requestNotificationPermission() { if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 }
 
 data class GameProfile(val name: String, val packageName: String)
